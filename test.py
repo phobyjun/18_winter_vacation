@@ -1,71 +1,66 @@
 import tensorflow as tf
-import numpy as np
+from tensorflow.examples.tutorials.mnist import input_data
+mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 
-x_data = np.array(
-    [[1, 1, 4, 50], [1, 0, 4, 5], [1, 0, 4, 20], [1, 0, 4, 10], [1, 1, 4, 100], [1, 0, 4, 12],
-     [1, 0, 4, 15], [1, 1, 4, 75]]
-)
 
-y_data = np.array([
-    [1, 0, 0],
-    [0, 0, 1],
-    [0, 1, 0],
-    [0, 0, 1],
-    [1, 0, 0],
-    [0, 0, 1],
-    [0, 1, 0],
-    [1, 0, 0]
-])
+def layer(input, weight_shape, bias_shape):
+    weight_stddev = (2.0/weight_shape[0])**0.5
+    w_init = tf.random_normal_initializer(stddev=weight_stddev)
+    bias_init = tf.constant_initializer(value=0)
+    W = tf.get_variable("W", weight_shape, initializer=w_init)
+    b = tf.get_variable("b", bias_shape, initializer=bias_init)
+    return tf.nn.relu(tf.matmul(input, W) + b)
 
-X = tf.placeholder(tf.float32, shape=[None, 4])
-Y = tf.placeholder(tf.float32, shape=[None, 3])
 
-W1 = tf.Variable(tf.random_uniform([4, 4], -1., 1.))
-b1 = tf.Variable(tf.zeros([4]))
-L1 = tf.nn.relu(tf.add(tf.matmul(X, W1), b1))
+def inference(x):
+    with tf.variable_scope("hidden_1"):
+        hidden_1 = layer(x, [784, 256], [256])
+    with tf.variable_scope("hidden_2"):
+        hidden_2 = layer(hidden_1, [256, 256], [256])
+    with tf.variable_scope("output"):
+        output = layer(hidden_2, [256, 10], [10])
 
-W2 = tf.Variable(tf.random_normal([4, 5]))
-b2 = tf.Variable(tf.zeros([5]))
-L2 = tf.nn.relu(tf.add(tf.matmul(L1, W2), b2))
+    return output
 
-W3 = tf.Variable(tf.random_normal([5, 6]))
-b3 = tf.Variable(tf.zeros([6]))
-L3 = tf.nn.relu(tf.add(tf.matmul(L2, W3), b3))
 
-W4 = tf.Variable(tf.random_normal([6, 4]))
-b4 = tf.Variable(tf.zeros([4]))
-L4 = tf.nn.relu(tf.add(tf.matmul(L3, W4), b4))
+def loss(output, y):
+    xentropy = tf.nn.softmax_cross_entropy_with_logits(logits=output, labels=y)
+    loss = tf.reduce_mean(xentropy)
+    return loss
 
-W5 = tf.Variable(tf.random_normal([4, 3]))
-b5 = tf.Variable(tf.zeros([3]))
-L5 = tf.nn.relu(tf.add(tf.matmul(L4, W5), b5))
 
-W6 = tf.Variable(tf.random_normal([3, 3]))
-b6 = tf.Variable(tf.zeros([3]))
-model = tf.add(tf.matmul(L5, W6), b6)
+def training(cost, global_step):
+    tf.summary.scalar('cost', cost)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.1)
+    train_op = optimizer.minimize(cost, global_step=global_step)
+    return train_op
 
-cost = tf.reduce_mean(
-    tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y, logits=model))
 
-optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
-train_op = optimizer.minimize(cost)
+def evaluate(output, y):
+    correct_prediction = tf.equal(tf.argmax(output, 1), tf.argmax(y, 1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    return accuracy
 
-init = tf.global_variables_initializer()
+
+# 28*29=784 형태의 MNIST 데이터 이미지
+x = tf.placeholder('float', [None, 784])
+# 0~9 숫자 인식 => 10 클래스
+y = tf.placeholder('float', [None, 10])
+
 sess = tf.Session()
-sess.run(init)
 
-for step in range(100):
-    sess.run(train_op, feed_dict={X: x_data, Y: y_data})
-
-    if (step + 1) % 10 == 0:
-        print(step + 1, sess.run(cost, feed_dict={X: x_data, Y: y_data}))
-
-prediction = tf.argmax(model, 1)
-target = tf.argmax(Y, 1)
-print('예측값:', sess.run(prediction, feed_dict={X: x_data}))
-print('실제값:', sess.run(target, feed_dict={Y: y_data}))
-
-is_correct = tf.equal(prediction, target)
-accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
-print('정확도: %.2f' % sess.run(accuracy * 100, feed_dict={X: x_data, Y: y_data}))
-sess.close()
+with tf.variable_scope("mlp_moder") as scope:
+    output_opt = inference(x)
+    cost_opt = loss(output_opt, y)
+    saver = tf.train.Saver()
+    scope.reuse_variables()
+    var_list_opt = [
+        'hidden_1/W',
+        'hidden_1/b',
+        'hidden_2/W',
+        'hidden_2/b',
+        'output/W',
+        'output/b',
+    ]
+    var_list_opt = [tf.get_variable(v) for v in var_list_opt]
+    saver.restore(sess, 'mlp_logs/model-checkpoint-file')

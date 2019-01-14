@@ -1,5 +1,3 @@
-import tensorflow as tf
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -46,7 +44,7 @@ class DeepNeuralNetwork:
             label = int(x[0])
             predicted = np.argmax(self.predict(x))
             if label == predicted:
-                matched  = matched + 1
+                matched = matched + 1
 
         print("Current Accuracy : {0}%".format(matched/len(self.test_data)))
 
